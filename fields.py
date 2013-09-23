@@ -30,9 +30,13 @@ class GFile(models.FileField):
             self._content_type = value.content_type
     
     def save_datastore(self):
+        if self.key:
+            return
         self._key = blob.save(self.file.read())
 
     def get_datastore(self):
+        if self.file:
+            return
         self._f = StringIO(blob.get(self.key))
 
     @property
@@ -81,7 +85,6 @@ class AESGFile(GFile):
         value = self.aes.decrypt(value).strip()
         value = base64.b64decode(value)
         self.file = StringIO(value)
-
 
     @property
     def aes(self):
