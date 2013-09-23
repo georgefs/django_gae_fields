@@ -23,19 +23,19 @@ class GFile(models.FileField):
         data = dict()
         if isinstance(value, basestring):
             data = json.loads(value)
-            self.key = data['key']
-            self.content_type = data['content_type']
+            self._key = data['key']
+            self._content_type = data['content_type']
         else:
             self._f = value.file
             self._content_type = value.content_type
     
     def save_datastore(self):
-        if self.key:
+        if self._key:
             return
         self._key = blob.save(self.file.read())
 
     def get_datastore(self):
-        if self.file:
+        if self._f:
             return
         self._f = StringIO(blob.get(self.key))
 
@@ -62,6 +62,8 @@ class GFile(models.FileField):
         data['content_type'] = self.content_type
         return json.dumps(data)
 
+
+import logging
 class AESGFile(GFile):
     def __init__(self, key="", iv="",  *args, **kwargs):
         self.key = smart_str(key).rjust(16)
@@ -72,7 +74,7 @@ class AESGFile(GFile):
         return super(AESGFile, self).__init__(self, *args, **kwargs)
 
     def save_datastore(self):
-        if self.key:
+        if self._key:
             return
         value = base64.b64encode(value)
         value = value + " " * (16 - len(value) % 16)
@@ -80,11 +82,11 @@ class AESGFile(GFile):
         self._key = blob.save(value)
         
     def get_datastore(self):
-        if self.file:
+        if self._f:
             return
         value = self.aes.decrypt(value).strip()
         value = base64.b64decode(value)
-        self.file = StringIO(value)
+        self._f = StringIO(value)
 
     @property
     def aes(self):
