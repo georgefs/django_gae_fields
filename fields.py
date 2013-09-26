@@ -12,6 +12,7 @@ import blob
 from django import forms
 from Crypto.Cipher import AES
 import base64
+from django.utils.encoding import smart_str
 
 
 
@@ -19,7 +20,7 @@ class GFile(models.FileField):
     _key=None
     _content_type=None
     _f=None
-    def __init__(self, value):
+    def __init__(self, value, *args, **kwargs):
         data = dict()
         if isinstance(value, basestring):
             data = json.loads(value)
@@ -65,17 +66,25 @@ class GFile(models.FileField):
 
 import logging
 class AESGFile(GFile):
-    def __init__(self, key="", iv="",  *args, **kwargs):
-        self.key = smart_str(key).rjust(16)
-        self.iv = smart_str(iv).rjust(16)
-        self.aes_prefix = aes_prefix
-        assert len(self.key) == 16, 'key must less then 16 byte string'
-        assert len(self.iv) == 16, 'iv must less then 16 byte string'
-        return super(AESGFile, self).__init__(self, *args, **kwargs)
+    aes_key = None
+    aes_iv = None
+    def __init__(self, value, key="", iv="",  *args, **kwargs):
+        if isinstance(value, basestring):
+            data = json.loads(value)
+            self._key = data['key']
+            self._content_type = data['content_type']
+        else:
+            self._f = value.file
+            self._content_type = value.content_type
+        self.aes_key = smart_str(key).rjust(16)
+        self.aes_iv = smart_str(iv).rjust(16)
+        assert len(self.aes_key) == 16, 'key must less then 16 byte string'
+        assert len(self.aes_iv) == 16, 'iv must less then 16 byte string'
 
     def save_datastore(self):
         if self._key:
             return
+        value = self._f.read()
         value = base64.b64encode(value)
         value = value + " " * (16 - len(value) % 16)
         value = self.aes.encrypt(value)
@@ -84,13 +93,14 @@ class AESGFile(GFile):
     def get_datastore(self):
         if self._f:
             return
+        value = blob.get(self._key)
         value = self.aes.decrypt(value).strip()
         value = base64.b64decode(value)
         self._f = StringIO(value)
 
     @property
     def aes(self):
-        return AES.new(self.key, AES.MODE_CBC, self.iv)
+        return AES.new(self.aes_key, AES.MODE_CBC, self.aes_iv)
 
 
 
@@ -106,7 +116,7 @@ class GFileField(models.Field):
         return 'TEXT'
 
     def formfield(self, **kwargs):
-        defaults = {'form_class': forms.FileField, 'max_length': self.max_length}
+        defaults = {'form_class': forms.FileField}
         if 'initial' in kwargs:
             defaults['required'] = False
 
@@ -114,7 +124,18 @@ class GFileField(models.Field):
         return super(GFileField, self).formfield(**defaults)
 
 class AESGFileField(GFileField):
+    key = None
+    iv = None
+    def __init__(self, key="", iv="", *args, **kwargs):
+        self.key = key
+        self.iv = iv
+        super(AESGFileField, self).__init__(self, *args, **kwargs)
+
     def to_python(self, value):
-        return AESGFile(value)
+        return AESGFile(value, key=self.key, iv=self.iv)
+
+    def contribute_to_class(self, cls, name):
+        super(AESGFileField, self).contribute_to_class(cls, name)
+        setattr(cls, name, self)
 
 
