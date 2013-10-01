@@ -33,6 +33,7 @@ class GFile(models.FileField):
     def save_datastore(self):
         if self._key:
             return
+        self.file.seek(0)
         self._key = blob.save(self.file.read())
 
     def get_datastore(self):
@@ -44,6 +45,7 @@ class GFile(models.FileField):
     def file(self):
         if not self._f:
             self.get_datastore()
+        self._f.seek(0)
         return self._f
 
     @property
@@ -106,12 +108,13 @@ class AESGFile(GFile):
 
 class GFileField(models.Field):
     def to_python(self, value):
+        if not value:
+            return value
         return GFile(value)
 
     def get_prep_value(self, value):
         if not value:
             return value
-        import pdb;pdb.set_trace()
         value = self.to_python(value)
         return value.content
 
@@ -143,4 +146,11 @@ class AESGFileField(GFileField):
         super(AESGFileField, self).contribute_to_class(cls, name)
         setattr(cls, name, self)
 
+
+try:
+    from south.modelsinspector import add_introspection_rules
+    add_introspection_rules([], ["^django_gae\.fields\.GFileField"])
+    add_introspection_rules([], ["^django_gae\.fields\.AESGFileField"])
+except:
+    pass
 
