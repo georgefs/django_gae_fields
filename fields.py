@@ -109,6 +109,9 @@ class GFileField(models.Field):
         return GFile(value)
 
     def get_prep_value(self, value):
+        if not value:
+            return value
+        import pdb;pdb.set_trace()
         value = self.to_python(value)
         return value.content
 
@@ -132,6 +135,8 @@ class AESGFileField(GFileField):
         super(AESGFileField, self).__init__(self, *args, **kwargs)
 
     def to_python(self, value):
+        if not value:
+            return value
         return AESGFile(value, key=self.key, iv=self.iv)
 
     def contribute_to_class(self, cls, name):
